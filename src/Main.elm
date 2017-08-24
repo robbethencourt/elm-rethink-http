@@ -12,7 +12,7 @@ import Json.Decode.Pipeline as JDP exposing (decode, required)
 
 
 type alias Model =
-    { profile : ExternalResource Profile
+    { profile : Profile
     , page : Page
     , theError : Maybe String
     }
@@ -21,7 +21,7 @@ type alias Model =
 type ExternalResource
     = NotRequested
     | Loading
-    | BijanReceived (Result Http.Error Profile)
+    | UserReceived (Result Http.Error Profile)
 
 
 type Page
@@ -40,7 +40,7 @@ type alias Profile =
 
 init : ( Model, Cmd Msg )
 init =
-    ( { profile = NotRequested
+    ( { profile = initProfile
       , page = TheView
       , theError = Nothing
       }
@@ -53,8 +53,8 @@ init =
 
 
 type Msg
-    = FetchBijan
-    | BijanReceived (Result Http.Error Profile)
+    = FetchUser
+    | RequestReceived (Result Http.Error Profile)
 
 
 
@@ -64,32 +64,32 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        FetchBijan ->
-            ( { model | profile = Loading }, fetchBijan )
+        FetchUser ->
+            ( model, fetchUser )
 
-        BijanReceived result ->
+        RequestReceived result ->
             case result of
                 Ok bijan ->
                     ( model, Cmd.none )
 
                 Err error ->
-                    ( { model | theError = Just (httpErrorString error "Woops!") }, Cmd.none )
+                    ( { model | theError = Just (httpErrorString error "Woops! ") }, Cmd.none )
 
 
-fetchBijan : Cmd Msg
-fetchBijan =
+fetchUser : Cmd Msg
+fetchUser =
     let
         url =
             "https://www.codeschool.com/users/bijanbwb.json"
 
         request =
-            Http.get url decodeBijan
+            Http.get url decodeUser
     in
-        Http.send BijanReceived request
+        Http.send RequestReceived request
 
 
-decodeBijan : Decode.Decoder Profile
-decodeBijan =
+decodeUser : Decode.Decoder Profile
+decodeUser =
     Decode.at [ "user" ] decodeMore
 
 
@@ -133,8 +133,8 @@ view model =
         [ div []
             [ input
                 [ type_ "button"
-                , value "Get Bijan!"
-                , onClick FetchBijan
+                , value "Get User!"
+                , onClick FetchUser
                 ]
                 []
             ]
