@@ -12,16 +12,16 @@ import Json.Decode.Pipeline as JDP exposing (decode, required)
 
 
 type alias Model =
-    { profile : Profile
+    { repo : List Repo
     , page : Page
-    , theError : Maybe String
+    , errorMessage : Maybe String
     }
 
 
 type ExternalResource
     = NotRequested
     | Loading
-    | UserReceived (Result Http.Error Profile)
+    | UserReceived (Result Http.Error Repo)
 
 
 type Page
@@ -29,20 +29,32 @@ type Page
     | TheView
 
 
-initProfile : Profile
-initProfile =
-    { username = "" }
+
+-- initRepo : Repo
+-- initRepo =
+--     { name = ""
+--     , private = False
+--     , url = ""
+--     , created_at = ""
+--     , stargazers_count = 0
+--     , open_issues_count = 0 }
 
 
-type alias Profile =
-    { username : String }
+type alias Repo =
+    { name : String
+    , private : Bool
+    , url : String
+    , created_at : String
+    , stargazers_count : Int
+    , open_issues_count : Int
+    }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( { profile = initProfile
+    ( { repo = []
       , page = TheView
-      , theError = Nothing
+      , errorMessage = Nothing
       }
     , Cmd.none
     )
@@ -53,50 +65,59 @@ init =
 
 
 type Msg
-    = FetchUser
-    | RequestReceived (Result Http.Error Profile)
+    = FetchRepos
+    | RequestReceived (Result Http.Error Repo)
 
 
 
--- | ProfileRequest
+-- | RepoRequest
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        FetchUser ->
-            ( model, fetchUser )
+        FetchRepos ->
+            ( model, fetchRepos )
 
         RequestReceived result ->
             case result of
-                Ok bijan ->
+                Ok repos ->
                     ( model, Cmd.none )
 
                 Err error ->
-                    ( { model | theError = Just (httpErrorString error "Woops! ") }, Cmd.none )
+                    ( { model | errorMessage = Just (httpErrorString error "Woops! ") }, Cmd.none )
 
 
-fetchUser : Cmd Msg
-fetchUser =
+fetchRepos : Cmd Msg
+fetchRepos =
     let
+        language =
+            "elm"
+
+        date =
+            "2017-09-01"
+
         url =
-            "https://www.codeschool.com/users/bijanbwb.json"
+            "https://api.github.com/search/repositories?q=language:"
+                ++ language
+                ++ "+created:>="
+                ++ date
 
         request =
-            Http.get url decodeUser
+            Http.get url decodeRepo
     in
         Http.send RequestReceived request
 
 
-decodeUser : Decode.Decoder Profile
-decodeUser =
-    Decode.at [ "user" ] decodeMore
-
-
-decodeMore : Decode.Decoder Profile
-decodeMore =
-    decode Profile
-        |> JDP.required "username" Decode.string
+decodeRepo : Decode.Decoder Repo
+decodeRepo =
+    decode Repo
+        |> JDP.required "name" Decode.string
+        |> JDP.required "private" Decode.bool
+        |> JDP.required "url" Decode.string
+        |> JDP.required "created_at" Decode.string
+        |> JDP.required "stargazers_count" Decode.int
+        |> JDP.required "open_issues_count" Decode.int
 
 
 httpErrorString : Http.Error -> String -> String
@@ -133,8 +154,8 @@ view model =
         [ div []
             [ input
                 [ type_ "button"
-                , value "Get User!"
-                , onClick FetchUser
+                , value "Get Repos!"
+                , onClick FetchRepos
                 ]
                 []
             ]
