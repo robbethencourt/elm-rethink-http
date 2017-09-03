@@ -1,18 +1,22 @@
 module Main exposing (..)
 
-import Html exposing (Html, text, div, img, input)
-import Html.Attributes exposing (src, type_, value)
-import Html.Events exposing (onClick)
+import Html exposing (Html, text, div, button, input, h1, label, select, option, table, thead, tr, th, tbody, td, a)
+import Html.Attributes exposing (src, type_, value, class, style, href)
+import Html.Events exposing (onClick, onInput)
 import Http
 import Json.Decode as Decode
 import Json.Decode.Pipeline as JDP exposing (decode, required)
+import Task
+import Date
 
 
 ---- MODEL ----
 
 
 type alias Model =
-    { repo : List Repo
+    { languageInput : String
+    , dateInput : String
+    , repos : List Repo
     , page : Page
     , errorMessage : Maybe String
     }
@@ -29,21 +33,15 @@ type Page
     | TheView
 
 
-
--- initRepo : Repo
--- initRepo =
---     { name = ""
---     , private = False
---     , url = ""
---     , created_at = ""
---     , stargazers_count = 0
---     , open_issues_count = 0 }
+languages : List String
+languages =
+    [ "Elm", "Purescript", "Idris", "ClojureScript", "Fable", "GHCJS - Haskell", "ElixirScript", "Js_of_ocamal", "BuckleScript", "Reason", "Scala.js", "LiveScript", "Quack", "ion", "RamdaScript" ]
 
 
 type alias Repo =
     { name : String
     , private : Bool
-    , url : String
+    , html_url : String
     , created_at : String
     , stargazers_count : Int
     , open_issues_count : Int
@@ -52,11 +50,13 @@ type alias Repo =
 
 init : ( Model, Cmd Msg )
 init =
-    ( { repo = []
+    ( { languageInput = "Elm"
+      , dateInput = ""
+      , repos = []
       , page = TheView
       , errorMessage = Nothing
       }
-    , Cmd.none
+    , setTime
     )
 
 
@@ -65,8 +65,11 @@ init =
 
 
 type Msg
-    = FetchRepos
-    | RequestReceived (Result Http.Error Repo)
+    = SetDate Date.Date
+    | SelectLanguage String
+    | ChangeDate String
+    | FetchRepos
+    | RequestReceived (Result Http.Error (List Repo))
 
 
 
@@ -76,26 +79,117 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        SetDate date ->
+            ( { model
+                | dateInput = convertDateForHtmlDatepicker date
+              }
+            , Cmd.none
+            )
+
+        SelectLanguage language ->
+            ( { model
+                | languageInput = language
+              }
+            , Cmd.none
+            )
+
+        ChangeDate newDate ->
+            ( { model
+                | dateInput = newDate
+              }
+            , Cmd.none
+            )
+
         FetchRepos ->
-            ( model, fetchRepos )
+            ( model, fetchRepos model )
 
         RequestReceived result ->
             case result of
                 Ok repos ->
-                    ( model, Cmd.none )
+                    ( { model
+                        | repos = repos
+                      }
+                    , Cmd.none
+                    )
 
                 Err error ->
                     ( { model | errorMessage = Just (httpErrorString error "Woops! ") }, Cmd.none )
 
 
-fetchRepos : Cmd Msg
-fetchRepos =
+setTime : Cmd Msg
+setTime =
+    Task.perform SetDate Date.now
+
+
+convertDateForHtmlDatepicker : Date.Date -> String
+convertDateForHtmlDatepicker date =
+    toString (Date.year date)
+        ++ "-"
+        ++ formatDateWithZero (toString (convertMonth (Date.month date)))
+        ++ "-"
+        ++ formatDateWithZero (toString (Date.day date))
+
+
+formatDateWithZero : String -> String
+formatDateWithZero date =
+    let
+        intDate =
+            Result.withDefault 0 (String.toInt date)
+    in
+        if intDate < 10 then
+            "0" ++ date
+        else
+            date
+
+
+convertMonth : Date.Month -> Int
+convertMonth month =
+    case month of
+        Date.Jan ->
+            1
+
+        Date.Feb ->
+            2
+
+        Date.Mar ->
+            3
+
+        Date.Apr ->
+            4
+
+        Date.May ->
+            5
+
+        Date.Jun ->
+            6
+
+        Date.Jul ->
+            7
+
+        Date.Aug ->
+            8
+
+        Date.Sep ->
+            9
+
+        Date.Oct ->
+            10
+
+        Date.Nov ->
+            11
+
+        Date.Dec ->
+            12
+
+
+fetchRepos : Model -> Cmd Msg
+fetchRepos { languageInput, dateInput } =
     let
         language =
-            "elm"
+            languageInput
 
         date =
-            "2017-09-01"
+            dateInput
 
         url =
             "https://api.github.com/search/repositories?q=language:"
@@ -104,9 +198,14 @@ fetchRepos =
                 ++ date
 
         request =
-            Http.get url decodeRepo
+            Http.get url decodeRequest
     in
         Http.send RequestReceived request
+
+
+decodeRequest : Decode.Decoder (List Repo)
+decodeRequest =
+    Decode.at [ "items" ] (Decode.list decodeRepo)
 
 
 decodeRepo : Decode.Decoder Repo
@@ -114,7 +213,7 @@ decodeRepo =
     decode Repo
         |> JDP.required "name" Decode.string
         |> JDP.required "private" Decode.bool
-        |> JDP.required "url" Decode.string
+        |> JDP.required "html_url" Decode.string
         |> JDP.required "created_at" Decode.string
         |> JDP.required "stargazers_count" Decode.int
         |> JDP.required "open_issues_count" Decode.int
@@ -150,19 +249,83 @@ httpErrorString errorMessage customMessage =
 
 view : Model -> Html Msg
 view model =
-    div []
-        [ div []
-            [ input
-                [ type_ "button"
-                , value "Get Repos!"
-                , onClick FetchRepos
-                ]
-                []
+    div [ style [ ( "margin", "20px 10%" ) ] ]
+        [ div [ class "row" ]
+            [ div [ class "col" ]
+                [ h1 [ class "text-center" ] [ text "FP to JS Github Repos" ] ]
             ]
-        , div []
-            [ text "this is where the info goes." ]
-        , div [] [ text (toString model) ]
+        , div [ class "row" ]
+            [ div [ class "col" ]
+                [ label [] [ text "Language" ]
+                , select
+                    [ onInput SelectLanguage ]
+                    (List.map languageOption languages)
+                ]
+            , div [ class "col" ]
+                [ label [] [ text "Date" ]
+                , input
+                    [ type_ "date"
+                    , value model.dateInput
+                    , onInput ChangeDate
+                    ]
+                    []
+                ]
+            ]
+        , div [ class "row" ]
+            [ div [ class "col" ]
+                [ button
+                    [ onClick FetchRepos
+                    ]
+                    [ text "Get The Repos!" ]
+                ]
+            , div [ class "col" ] []
+            ]
+        , div [ class "row" ]
+            [ reposTable model.repos ]
         ]
+
+
+languageOption : String -> Html Msg
+languageOption language =
+    option [ value language ] [ text language ]
+
+
+reposTable : List Repo -> Html Msg
+reposTable repos =
+    repos
+        |> List.map reposTableBody
+        |> tbody []
+        |> appendTableHeader reposTableHeader
+        |> table [ class "table" ]
+
+
+reposTableHeader : Html Msg
+reposTableHeader =
+    thead []
+        [ tr []
+            [ th [] [ text "Name " ]
+            , th [] [ text "Private?" ]
+            , th [] [ text "Created On " ]
+            , th [ class "text-center" ] [ text "Stars " ]
+            , th [ class "text-center" ] [ text "Open Issues" ]
+            ]
+        ]
+
+
+reposTableBody : Repo -> Html Msg
+reposTableBody repo =
+    tr []
+        [ td [] [ a [ href repo.html_url ] [ text repo.name ] ]
+        , td [] [ text "True or False" ]
+        , td [] [ text repo.created_at ]
+        , td [ class "text-center" ] [ text (toString repo.stargazers_count) ]
+        , td [ class "text-center" ] [ text (toString repo.open_issues_count) ]
+        ]
+
+
+appendTableHeader : a -> a -> List a
+appendTableHeader x y =
+    x :: [ y ]
 
 
 
