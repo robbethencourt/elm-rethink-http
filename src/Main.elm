@@ -211,7 +211,7 @@ fetchRepos { languageInput, dateInput } =
             dateInput
 
         url =
-            "https://api.github.com/search/repositories?q=language:"
+            "https://api.github.com/search/repositories?q="
                 ++ language
                 ++ "+created:>="
                 ++ date
