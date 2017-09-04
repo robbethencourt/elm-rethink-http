@@ -15,11 +15,9 @@ import Date
 
 
 type alias Model =
-    { isLoading : Bool
-    , languageInput : String
+    { languageInput : String
     , dateInput : String
     , repos : ExternalResource Http.Error (List Repo)
-    , errorMessage : Maybe String
     }
 
 
@@ -47,11 +45,9 @@ type alias Repo =
 
 init : ( Model, Cmd Msg )
 init =
-    ( { isLoading = False
-      , languageInput = "Elm"
+    ( { languageInput = "Elm"
       , dateInput = ""
       , repos = NotRequested
-      , errorMessage = Nothing
       }
     , setTime
     )
@@ -98,12 +94,6 @@ update msg model =
             )
 
         FetchRepos ->
-            -- ( { model
-            --     | repos = Loading
-            --     , isLoading = True
-            --   }
-            -- , fetchRepos model
-            -- )
             ( { model
                 | repos = Loading
               }
@@ -114,31 +104,17 @@ update msg model =
             case result of
                 Ok repos ->
                     ( { model
-                        | repos =
-                            Success repos
-                            -- , isLoading = False
+                        | repos = Success repos
                       }
                     , Cmd.none
                     )
 
                 Err error ->
                     ( { model
-                        | repos =
-                            Failure error
-                            -- , errorMessage = Just (httpErrorString error "Woops! ")
-                            -- , isLoading = False
+                        | repos = Failure error
                       }
                     , Cmd.none
                     )
-
-
-
--- RequestReceived response ->
---     ( { model
---         | repos = response
---       }
---     , Cmd.none
---     )
 
 
 setTime : Cmd Msg
@@ -228,17 +204,6 @@ fetchRepos { languageInput, dateInput } =
         Http.send RequestReceived request
 
 
-
--- fromResult : Result e a -> RemoteData e a
--- fromResult result =
---     case result of
---         Err e ->
---             Failure e
---
---         Ok x ->
---             Success x
-
-
 decodeRequest : Decode.Decoder (List Repo)
 decodeRequest =
     Decode.at [ "items" ] (Decode.list decodeRepo)
@@ -310,51 +275,31 @@ view model =
         , div [ class "row" ]
             [ div [ class "col" ]
                 [ button
-                    [ onClick FetchRepos
-                    ]
+                    [ onClick FetchRepos ]
                     [ text "Get The Repos!" ]
                 ]
             , div [ class "col" ] []
             ]
-          -- , if model.isLoading then
-          --     div [ class "row" ]
-          --         [ div [ class "col text-center" ]
-          --             [ Loading.loadingAnimation ]
-          --         ]
-          --   else
-          --     div [] []
-          -- , if model.errorMessage /= Nothing then
-          --     div [ class "row" ]
-          --         [ div [ class "col" ]
-          --             [ p [ class "error-message" ] [ text (Maybe.withDefault "" model.errorMessage) ] ]
-          --         ]
-          --   else
-          --     div [] []
-          -- , div [ class "row" ]
-          --     [ reposTable model.repos ]
-        , case model.repos of
-            NotRequested ->
-                div [] []
+        , div [ class "row" ]
+            [ case model.repos of
+                NotRequested ->
+                    div [] []
 
-            Loading ->
-                div [ class "row" ]
-                    [ div [ class "col text-center" ]
+                Loading ->
+                    div [ class "col text-center" ]
                         [ Loading.loadingAnimation ]
-                    ]
 
-            Failure error ->
-                let
-                    errorMessage =
-                        Just (httpErrorString error "Woops! ")
-                in
-                    div [ class "row" ]
-                        [ div [ class "col" ]
+                Failure error ->
+                    let
+                        errorMessage =
+                            Just (httpErrorString error "Woops! ")
+                    in
+                        div [ class "col" ]
                             [ p [ class "error-message" ] [ text (Maybe.withDefault "" errorMessage) ] ]
-                        ]
 
-            Success repos ->
-                div [ class "row" ]
-                    [ reposTable repos ]
+                Success repos ->
+                    reposTable repos
+            ]
         ]
 
 
