@@ -38,7 +38,7 @@ type Page
 
 languages : List String
 languages =
-    [ "Elm", "Purescript", "Idris", "ClojureScript", "Fable", "GHCJS - Haskell", "ElixirScript", "Js_of_ocamal", "BuckleScript", "Reason", "Scala.js", "LiveScript", "Quack", "ion", "RamdaScript" ]
+    [ "Elm", "Purescript", "Idris", "ClojureScript", "Fable", "Haskell Miso", "ElixirScript", "js of OCaml", "Reason", "Scala.js", "BuckleScript", "ion", "F*", "RamdaScript", "Earl Grey", "LiveScript", "Quack", "Kotlin" ]
 
 
 type alias Repo =
@@ -107,7 +107,8 @@ update msg model =
 
         FetchRepos ->
             ( { model
-                | isLoading = True
+                | repos = []
+                , isLoading = True
                 , resultsReceived = False
               }
             , fetchRepos model
@@ -299,8 +300,6 @@ view model =
                 ]
             , div [ class "col" ] []
             ]
-        , div [ class "row" ]
-            [ reposTable model.repos ]
         , if model.isLoading then
             div [ class "row" ]
                 [ div [ class "col text-center" ]
@@ -320,6 +319,11 @@ view model =
                 [ div [ class "col" ]
                     [ p [ class "message" ] [ text "No repos found. Try searching from an earlier date, or get motivated and create a repo on github." ] ]
                 ]
+          else
+            div [] []
+        , if List.length model.repos > 0 && model.resultsReceived then
+            div [ class "row" ]
+                [ reposTable model.repos ]
           else
             div [] []
         ]
