@@ -24,17 +24,6 @@ type alias Model =
     }
 
 
-type ExternalResource
-    = NotRequested
-    | Loading
-    | UserReceived (Result Http.Error Repo)
-
-
-type Page
-    = LoadingView
-    | TheView
-
-
 languages : List String
 languages =
     [ "Elm", "Purescript", "Idris", "ClojureScript", "Fable", "Haskell Miso", "ElixirScript", "js of OCaml", "Reason", "Scala.js", "BuckleScript", "ion", "F*", "RamdaScript", "Earl Grey", "LiveScript", "Quack", "Kotlin" ]
