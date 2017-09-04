@@ -1,27 +1,34 @@
 module Main exposing (..)
 
-import Html exposing (Html, text, div, img, input)
-import Html.Attributes exposing (src, type_, value)
-import Html.Events exposing (onClick)
+import Loading
+import Html exposing (Html, text, div, button, input, h1, label, select, option, table, thead, tr, th, tbody, td, a, p)
+import Html.Attributes exposing (src, type_, value, class, style, href)
+import Html.Events exposing (onClick, onInput)
 import Http
 import Json.Decode as Decode
 import Json.Decode.Pipeline as JDP exposing (decode, required)
+import Task
+import Date
 
 
 ---- MODEL ----
 
 
 type alias Model =
-    { profile : Profile
+    { isLoading : Bool
+    , resultsReceived : Bool
+    , languageInput : String
+    , dateInput : String
+    , repos : List Repo
     , page : Page
-    , theError : Maybe String
+    , errorMessage : Maybe String
     }
 
 
 type ExternalResource
     = NotRequested
     | Loading
-    | UserReceived (Result Http.Error Profile)
+    | UserReceived (Result Http.Error Repo)
 
 
 type Page
@@ -29,22 +36,32 @@ type Page
     | TheView
 
 
-initProfile : Profile
-initProfile =
-    { username = "" }
+languages : List String
+languages =
+    [ "Elm", "Purescript", "Idris", "ClojureScript", "Fable", "Haskell Miso", "ElixirScript", "js of OCaml", "Reason", "Scala.js", "BuckleScript", "ion", "F*", "RamdaScript", "Earl Grey", "LiveScript", "Quack", "Kotlin" ]
 
 
-type alias Profile =
-    { username : String }
+type alias Repo =
+    { name : String
+    , private : Bool
+    , html_url : String
+    , created_at : String
+    , stargazers_count : Int
+    , open_issues_count : Int
+    }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( { profile = initProfile
+    ( { isLoading = False
+      , resultsReceived = False
+      , languageInput = "Elm"
+      , dateInput = ""
+      , repos = []
       , page = TheView
-      , theError = Nothing
+      , errorMessage = Nothing
       }
-    , Cmd.none
+    , setTime
     )
 
 
@@ -53,50 +70,173 @@ init =
 
 
 type Msg
-    = FetchUser
-    | RequestReceived (Result Http.Error Profile)
+    = SetDate Date.Date
+    | SelectLanguage String
+    | ChangeDate String
+    | FetchRepos
+    | RequestReceived (Result Http.Error (List Repo))
 
 
 
--- | ProfileRequest
+-- | RepoRequest
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        FetchUser ->
-            ( model, fetchUser )
+        SetDate date ->
+            ( { model
+                | dateInput = convertDateForHtmlDatepicker date
+              }
+            , Cmd.none
+            )
+
+        SelectLanguage language ->
+            ( { model
+                | languageInput = language
+              }
+            , Cmd.none
+            )
+
+        ChangeDate newDate ->
+            ( { model
+                | dateInput = newDate
+              }
+            , Cmd.none
+            )
+
+        FetchRepos ->
+            ( { model
+                | repos = []
+                , isLoading = True
+                , resultsReceived = False
+              }
+            , fetchRepos model
+            )
 
         RequestReceived result ->
             case result of
-                Ok bijan ->
-                    ( model, Cmd.none )
+                Ok repos ->
+                    ( { model
+                        | errorMessage = Nothing
+                        , repos = repos
+                        , isLoading = False
+                        , resultsReceived = True
+                      }
+                    , Cmd.none
+                    )
 
                 Err error ->
-                    ( { model | theError = Just (httpErrorString error "Woops! ") }, Cmd.none )
+                    ( { model
+                        | errorMessage = Just (httpErrorString error "Woops! ")
+                        , isLoading = False
+                        , resultsReceived = True
+                      }
+                    , Cmd.none
+                    )
 
 
-fetchUser : Cmd Msg
-fetchUser =
+setTime : Cmd Msg
+setTime =
+    Task.perform SetDate Date.now
+
+
+convertDateForHtmlDatepicker : Date.Date -> String
+convertDateForHtmlDatepicker date =
+    toString (Date.year date)
+        ++ "-"
+        ++ formatDateWithZero (toString (convertMonth (Date.month date)))
+        ++ "-"
+        ++ formatDateWithZero (toString (Date.day date))
+
+
+formatDateWithZero : String -> String
+formatDateWithZero date =
     let
+        intDate =
+            Result.withDefault 0 (String.toInt date)
+    in
+        if intDate < 10 then
+            "0" ++ date
+        else
+            date
+
+
+convertMonth : Date.Month -> Int
+convertMonth month =
+    case month of
+        Date.Jan ->
+            1
+
+        Date.Feb ->
+            2
+
+        Date.Mar ->
+            3
+
+        Date.Apr ->
+            4
+
+        Date.May ->
+            5
+
+        Date.Jun ->
+            6
+
+        Date.Jul ->
+            7
+
+        Date.Aug ->
+            8
+
+        Date.Sep ->
+            9
+
+        Date.Oct ->
+            10
+
+        Date.Nov ->
+            11
+
+        Date.Dec ->
+            12
+
+
+fetchRepos : Model -> Cmd Msg
+fetchRepos { languageInput, dateInput } =
+    let
+        language =
+            languageInput
+
+        date =
+            dateInput
+
         url =
-            "https://www.codeschool.com/users/bijanbwb.json"
+            "https://api.github.com/search/repositories?q="
+                ++ language
+                ++ "+created:>="
+                ++ date
 
         request =
-            Http.get url decodeUser
+            Http.get url decodeRequest
     in
         Http.send RequestReceived request
 
 
-decodeUser : Decode.Decoder Profile
-decodeUser =
-    Decode.at [ "user" ] decodeMore
+decodeRequest : Decode.Decoder (List Repo)
+decodeRequest =
+    Decode.at [ "items" ] (Decode.list decodeRepo)
 
 
-decodeMore : Decode.Decoder Profile
-decodeMore =
-    decode Profile
-        |> JDP.required "username" Decode.string
+decodeRepo : Decode.Decoder Repo
+decodeRepo =
+    decode Repo
+        |> JDP.required "name" Decode.string
+        |> JDP.required "private" Decode.bool
+        |> JDP.required "html_url" Decode.string
+        |> JDP.required "created_at" Decode.string
+        |> JDP.required "stargazers_count" Decode.int
+        |> JDP.required "open_issues_count" Decode.int
 
 
 httpErrorString : Http.Error -> String -> String
@@ -129,19 +269,117 @@ httpErrorString errorMessage customMessage =
 
 view : Model -> Html Msg
 view model =
-    div []
-        [ div []
-            [ input
-                [ type_ "button"
-                , value "Get User!"
-                , onClick FetchUser
-                ]
-                []
+    div [ style [ ( "margin", "20px 10%" ) ] ]
+        [ div [ class "row" ]
+            [ div [ class "col" ]
+                [ h1 [ class "text-center" ] [ text "FP to JS Github Repos" ] ]
             ]
-        , div []
-            [ text "this is where the info goes." ]
-        , div [] [ text (toString model) ]
+        , div [ class "row" ]
+            [ div [ class "col" ]
+                [ label [] [ text "Language" ]
+                , select
+                    [ onInput SelectLanguage ]
+                    (List.map languageOption languages)
+                ]
+            , div [ class "col" ]
+                [ label [] [ text "Date" ]
+                , input
+                    [ type_ "date"
+                    , value model.dateInput
+                    , onInput ChangeDate
+                    ]
+                    []
+                ]
+            ]
+        , div [ class "row" ]
+            [ div [ class "col" ]
+                [ button
+                    [ onClick FetchRepos
+                    ]
+                    [ text "Get The Repos!" ]
+                ]
+            , div [ class "col" ] []
+            ]
+        , if model.isLoading then
+            div [ class "row" ]
+                [ div [ class "col text-center" ]
+                    [ Loading.loadingAnimation ]
+                ]
+          else
+            div [] []
+        , if model.errorMessage /= Nothing then
+            div [ class "row" ]
+                [ div [ class "col" ]
+                    [ p [ class "error-message" ] [ text (Maybe.withDefault "" model.errorMessage) ] ]
+                ]
+          else
+            div [] []
+        , if List.length model.repos == 0 && model.resultsReceived then
+            div [ class "row" ]
+                [ div [ class "col" ]
+                    [ p [ class "message" ] [ text "No repos found. Try searching from an earlier date, or get motivated and create a repo on github." ] ]
+                ]
+          else
+            div [] []
+        , if List.length model.repos > 0 && model.resultsReceived then
+            div [ class "row" ]
+                [ reposTable model.repos ]
+          else
+            div [] []
         ]
+
+
+languageOption : String -> Html Msg
+languageOption language =
+    option [ value language ] [ text language ]
+
+
+reposTable : List Repo -> Html Msg
+reposTable repos =
+    repos
+        |> List.map reposTableBody
+        |> tbody []
+        |> appendTableHeader reposTableHeader
+        |> table [ class "table" ]
+
+
+reposTableHeader : Html Msg
+reposTableHeader =
+    thead []
+        [ tr []
+            [ th [] [ text "Name " ]
+            , th [] [ text "Private?" ]
+            , th [] [ text "Created On " ]
+            , th [ class "text-center" ] [ text "Stars " ]
+            , th [ class "text-center" ] [ text "Open Issues" ]
+            ]
+        ]
+
+
+reposTableBody : Repo -> Html Msg
+reposTableBody { name, private, html_url, created_at, stargazers_count, open_issues_count } =
+    tr []
+        [ td [] [ a [ href html_url ] [ text name ] ]
+        , td [] [ text (boolToString private) ]
+        , td [] [ text created_at ]
+        , td [ class "text-center" ] [ text (toString stargazers_count) ]
+        , td [ class "text-center" ] [ text (toString open_issues_count) ]
+        ]
+
+
+appendTableHeader : a -> a -> List a
+appendTableHeader x y =
+    x :: [ y ]
+
+
+boolToString : Bool -> String
+boolToString boolean =
+    case boolean of
+        True ->
+            "True"
+
+        False ->
+            "False"
 
 
 

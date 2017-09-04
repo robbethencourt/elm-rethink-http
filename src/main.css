@@ -1,12 +1,38 @@
-body {
-  font-family: 'Source Sans Pro', 'Trebuchet MS', 'Lucida Grande', 'Bitstream Vera Sans', 'Helvetica Neue', sans-serif;
-  font-size: 30px;
-  margin: 0;
-  text-align: center;
-  color: #293c4b;
+input[type="date"] {
+    width: 100%;
+    height: 41px;
+    padding: 1.1rem;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    background: #FFFFFF;
+    border-radius: 2px;
+    border: 1px solid #a4a4a4;
+    font-size: 1.3rem;
+    box-sizing: border-box;
+    transition: all .2s ease;
 }
 
-img {
-  margin: 20px 0;
-  max-width: 200px;
+.loading-infinite {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 25;
+  stroke-linecap: round;
+  animation: loading-infinite 2s linear infinite;
+}
+
+@keyframes loading-infinite {
+  0% {stroke-dasharray: 10; stroke-dashoffset: 30;}
+  25% {stroke-dasharray: 20; stroke-dashoffset: 45;}
+  75% {stroke-dasharray: 38; stroke-dashoffset: 90;}
+}
+
+.error-message {
+  padding: 1em;
+  color: #ffffff;
+  background-color: #FF5C5C;
+}
+
+.message {
+  padding: 1em;
+  color: #ffffff;
+  background-color: #22BCF0;
 }
