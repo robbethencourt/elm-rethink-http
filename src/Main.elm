@@ -18,9 +18,16 @@ type alias Model =
     { isLoading : Bool
     , languageInput : String
     , dateInput : String
-    , repos : Maybe (List Repo)
+    , repos : ExternalResource Http.Error (List Repo)
     , errorMessage : Maybe String
     }
+
+
+type ExternalResource error data
+    = NotRequested
+    | Loading
+    | Failure error
+    | Success data
 
 
 languages : List String
@@ -43,7 +50,7 @@ init =
     ( { isLoading = False
       , languageInput = "Elm"
       , dateInput = ""
-      , repos = Nothing
+      , repos = NotRequested
       , errorMessage = Nothing
       }
     , setTime
@@ -91,9 +98,14 @@ update msg model =
             )
 
         FetchRepos ->
+            -- ( { model
+            --     | repos = Loading
+            --     , isLoading = True
+            --   }
+            -- , fetchRepos model
+            -- )
             ( { model
-                | repos = Nothing
-                , isLoading = True
+                | repos = Loading
               }
             , fetchRepos model
             )
@@ -102,20 +114,31 @@ update msg model =
             case result of
                 Ok repos ->
                     ( { model
-                        | errorMessage = Nothing
-                        , repos = Just repos
-                        , isLoading = False
+                        | repos =
+                            Success repos
+                            -- , isLoading = False
                       }
                     , Cmd.none
                     )
 
                 Err error ->
                     ( { model
-                        | errorMessage = Just (httpErrorString error "Woops! ")
-                        , isLoading = False
+                        | repos =
+                            Failure error
+                            -- , errorMessage = Just (httpErrorString error "Woops! ")
+                            -- , isLoading = False
                       }
                     , Cmd.none
                     )
+
+
+
+-- RequestReceived response ->
+--     ( { model
+--         | repos = response
+--       }
+--     , Cmd.none
+--     )
 
 
 setTime : Cmd Msg
@@ -205,6 +228,17 @@ fetchRepos { languageInput, dateInput } =
         Http.send RequestReceived request
 
 
+
+-- fromResult : Result e a -> RemoteData e a
+-- fromResult result =
+--     case result of
+--         Err e ->
+--             Failure e
+--
+--         Ok x ->
+--             Success x
+
+
 decodeRequest : Decode.Decoder (List Repo)
 decodeRequest =
     Decode.at [ "items" ] (Decode.list decodeRepo)
@@ -282,22 +316,45 @@ view model =
                 ]
             , div [ class "col" ] []
             ]
-        , if model.isLoading then
-            div [ class "row" ]
-                [ div [ class "col text-center" ]
-                    [ Loading.loadingAnimation ]
-                ]
-          else
-            div [] []
-        , if model.errorMessage /= Nothing then
-            div [ class "row" ]
-                [ div [ class "col" ]
-                    [ p [ class "error-message" ] [ text (Maybe.withDefault "" model.errorMessage) ] ]
-                ]
-          else
-            div [] []
-        , div [ class "row" ]
-            [ reposTable model.repos ]
+          -- , if model.isLoading then
+          --     div [ class "row" ]
+          --         [ div [ class "col text-center" ]
+          --             [ Loading.loadingAnimation ]
+          --         ]
+          --   else
+          --     div [] []
+          -- , if model.errorMessage /= Nothing then
+          --     div [ class "row" ]
+          --         [ div [ class "col" ]
+          --             [ p [ class "error-message" ] [ text (Maybe.withDefault "" model.errorMessage) ] ]
+          --         ]
+          --   else
+          --     div [] []
+          -- , div [ class "row" ]
+          --     [ reposTable model.repos ]
+        , case model.repos of
+            NotRequested ->
+                div [] []
+
+            Loading ->
+                div [ class "row" ]
+                    [ div [ class "col text-center" ]
+                        [ Loading.loadingAnimation ]
+                    ]
+
+            Failure error ->
+                let
+                    errorMessage =
+                        Just (httpErrorString error "Woops! ")
+                in
+                    div [ class "row" ]
+                        [ div [ class "col" ]
+                            [ p [ class "error-message" ] [ text (Maybe.withDefault "" errorMessage) ] ]
+                        ]
+
+            Success repos ->
+                div [ class "row" ]
+                    [ reposTable repos ]
         ]
 
 
@@ -306,24 +363,19 @@ languageOption language =
     option [ value language ] [ text language ]
 
 
-reposTable : Maybe (List Repo) -> Html Msg
+reposTable : List Repo -> Html Msg
 reposTable repos =
     case repos of
-        Nothing ->
-            div [] []
+        [] ->
+            div [ class "col" ]
+                [ p [ class "message" ] [ text "No repos found. Try searching from an earlier date, or get motivated and create a repo on github." ] ]
 
-        Just reposReceived ->
-            case reposReceived of
-                [] ->
-                    div [ class "col" ]
-                        [ p [ class "message" ] [ text "No repos found. Try searching from an earlier date, or get motivated and create a repo on github." ] ]
-
-                _ ->
-                    reposReceived
-                        |> List.map reposTableBody
-                        |> tbody []
-                        |> appendTableHeader reposTableHeader
-                        |> table [ class "table" ]
+        _ ->
+            repos
+                |> List.map reposTableBody
+                |> tbody []
+                |> appendTableHeader reposTableHeader
+                |> table [ class "table" ]
 
 
 reposTableHeader : Html Msg
