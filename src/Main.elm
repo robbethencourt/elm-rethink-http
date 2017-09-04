@@ -1,6 +1,7 @@
 module Main exposing (..)
 
-import Html exposing (Html, text, div, button, input, h1, label, select, option, table, thead, tr, th, tbody, td, a)
+import Loading
+import Html exposing (Html, text, div, button, input, h1, label, select, option, table, thead, tr, th, tbody, td, a, p)
 import Html.Attributes exposing (src, type_, value, class, style, href)
 import Html.Events exposing (onClick, onInput)
 import Http
@@ -14,7 +15,9 @@ import Date
 
 
 type alias Model =
-    { languageInput : String
+    { isLoading : Bool
+    , resultsReceived : Bool
+    , languageInput : String
     , dateInput : String
     , repos : List Repo
     , page : Page
@@ -50,7 +53,9 @@ type alias Repo =
 
 init : ( Model, Cmd Msg )
 init =
-    ( { languageInput = "Elm"
+    ( { isLoading = False
+      , resultsReceived = False
+      , languageInput = "Elm"
       , dateInput = ""
       , repos = []
       , page = TheView
@@ -101,19 +106,33 @@ update msg model =
             )
 
         FetchRepos ->
-            ( model, fetchRepos model )
+            ( { model
+                | isLoading = True
+                , resultsReceived = False
+              }
+            , fetchRepos model
+            )
 
         RequestReceived result ->
             case result of
                 Ok repos ->
                     ( { model
-                        | repos = repos
+                        | errorMessage = Nothing
+                        , repos = repos
+                        , isLoading = False
+                        , resultsReceived = True
                       }
                     , Cmd.none
                     )
 
                 Err error ->
-                    ( { model | errorMessage = Just (httpErrorString error "Woops! ") }, Cmd.none )
+                    ( { model
+                        | errorMessage = Just (httpErrorString error "Woops! ")
+                        , isLoading = False
+                        , resultsReceived = True
+                      }
+                    , Cmd.none
+                    )
 
 
 setTime : Cmd Msg
@@ -282,6 +301,27 @@ view model =
             ]
         , div [ class "row" ]
             [ reposTable model.repos ]
+        , if model.isLoading then
+            div [ class "row" ]
+                [ div [ class "col text-center" ]
+                    [ Loading.loadingAnimation ]
+                ]
+          else
+            div [] []
+        , if model.errorMessage /= Nothing then
+            div [ class "row" ]
+                [ div [ class "col" ]
+                    [ p [ class "error-message" ] [ text (Maybe.withDefault "" model.errorMessage) ] ]
+                ]
+          else
+            div [] []
+        , if List.length model.repos == 0 && model.resultsReceived then
+            div [ class "row" ]
+                [ div [ class "col" ]
+                    [ p [ class "message" ] [ text "No repos found. Try searching from an earlier date, or get motivated and create a repo on github." ] ]
+                ]
+          else
+            div [] []
         ]
 
 
@@ -313,19 +353,29 @@ reposTableHeader =
 
 
 reposTableBody : Repo -> Html Msg
-reposTableBody repo =
+reposTableBody { name, private, html_url, created_at, stargazers_count, open_issues_count } =
     tr []
-        [ td [] [ a [ href repo.html_url ] [ text repo.name ] ]
-        , td [] [ text "True or False" ]
-        , td [] [ text repo.created_at ]
-        , td [ class "text-center" ] [ text (toString repo.stargazers_count) ]
-        , td [ class "text-center" ] [ text (toString repo.open_issues_count) ]
+        [ td [] [ a [ href html_url ] [ text name ] ]
+        , td [] [ text (boolToString private) ]
+        , td [] [ text created_at ]
+        , td [ class "text-center" ] [ text (toString stargazers_count) ]
+        , td [ class "text-center" ] [ text (toString open_issues_count) ]
         ]
 
 
 appendTableHeader : a -> a -> List a
 appendTableHeader x y =
     x :: [ y ]
+
+
+boolToString : Bool -> String
+boolToString boolean =
+    case boolean of
+        True ->
+            "True"
+
+        False ->
+            "False"
 
 
 
