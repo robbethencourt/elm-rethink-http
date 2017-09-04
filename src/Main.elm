@@ -1,102 +1,33 @@
 module Main exposing (..)
 
 import Html exposing (Html, text, div, img, input)
-import Html.Attributes exposing (src, type_, value)
+import Html.Attributes exposing (src, type_, value, disabled)
 import Html.Events exposing (onClick)
-import Http
-import Json.Decode as Decode
-import Json.Decode.Pipeline as JDP exposing (decode, required)
-
-
----- MODEL ----
-
-
-type alias Model =
-    { profile : Profile
-    , page : Page
-    , theError : Maybe String
-    }
-
-
-type ExternalResource
-    = NotRequested
-    | Loading
-    | UserReceived (Result Http.Error Profile)
-
-
-type Page
-    = LoadingView
-    | TheView
-
-
-initProfile : Profile
-initProfile =
-    { username = "" }
-
-
-type alias Profile =
-    { username : String }
-
-
-init : ( Model, Cmd Msg )
-init =
-    ( { profile = initProfile
-      , page = TheView
-      , theError = Nothing
-      }
-    , Cmd.none
-    )
-
+import Http as Http
+import App as App
+import Profile as Profile
 
 
 ---- UPDATE ----
 
 
 type Msg
-    = FetchUser
-    | RequestReceived (Result Http.Error Profile)
+    = FetchUser App.FetchCap
+    | RequestReceived App.Msg
 
 
 
 -- | ProfileRequest
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
+update : Msg -> App.Model -> ( App.Model, Cmd Msg )
 update msg model =
     case msg of
-        FetchUser ->
-            ( model, fetchUser )
+        FetchUser cap ->
+            App.fetch RequestReceived cap
 
-        RequestReceived result ->
-            case result of
-                Ok bijan ->
-                    ( model, Cmd.none )
-
-                Err error ->
-                    ( { model | theError = Just (httpErrorString error "Woops! ") }, Cmd.none )
-
-
-fetchUser : Cmd Msg
-fetchUser =
-    let
-        url =
-            "https://www.codeschool.com/users/bijanbwb.json"
-
-        request =
-            Http.get url decodeUser
-    in
-        Http.send RequestReceived request
-
-
-decodeUser : Decode.Decoder Profile
-decodeUser =
-    Decode.at [ "user" ] decodeMore
-
-
-decodeMore : Decode.Decoder Profile
-decodeMore =
-    decode Profile
-        |> JDP.required "username" Decode.string
+        RequestReceived msg_ ->
+            ( App.process msg_, Cmd.none )
 
 
 httpErrorString : Http.Error -> String -> String
@@ -127,32 +58,65 @@ httpErrorString errorMessage customMessage =
 ---- VIEW ----
 
 
-view : Model -> Html Msg
+view : App.Model -> Html Msg
 view model =
-    div []
-        [ div []
-            [ input
-                [ type_ "button"
-                , value "Get User!"
-                , onClick FetchUser
+    case model of
+        App.Initial _ cap ->
+            view_
+                "Info goes here. Go head, do a fetch. I dare you."
+                (FetchUser cap |> Just)
+                model
+
+        App.Fetching _ ->
+            view_
+                "Fetching..."
+                Nothing
+                model
+
+        App.FetchError _ err cap ->
+            view_
+                (httpErrorString err "Fetch failed!")
+                (FetchUser cap |> Just)
+                model
+
+        App.FetchSuccess _ profile ->
+            view_
+                (Profile.apply (\{ username } -> "Success! " ++ username) profile)
+                Nothing
+                model
+
+
+view_ : String -> Maybe Msg -> App.Model -> Html Msg
+view_ message buttonMsg model =
+    let
+        buttonAttrs =
+            Maybe.map (\msg -> List.singleton (onClick msg)) buttonMsg
+                |> Maybe.withDefault [ disabled True ]
+                |> List.append
+                    [ type_ "button"
+                    , value "Get User!"
+                    ]
+    in
+        div []
+            [ div []
+                [ input buttonAttrs []
                 ]
-                []
+            , div []
+                [ text message ]
+            , div [] [ text (toString model) ]
             ]
-        , div []
-            [ text "this is where the info goes." ]
-        , div [] [ text (toString model) ]
-        ]
 
 
 
 ---- PROGRAM ----
 
 
-main : Program Never Model Msg
+{-| Sets up the Elm app, but notice the init field is not present. That's because it's provided by App.program because it's in control of the state changes, including the initial state.
+-}
+main : Program Never App.Model Msg
 main =
-    Html.program
+    App.program
         { view = view
-        , init = init
         , update = update
         , subscriptions = \_ -> Sub.none
         }
