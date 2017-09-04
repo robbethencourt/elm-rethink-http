@@ -20,7 +20,6 @@ type alias Model =
     , languageInput : String
     , dateInput : String
     , repos : List Repo
-    , page : Page
     , errorMessage : Maybe String
     }
 
@@ -47,7 +46,6 @@ init =
       , languageInput = "Elm"
       , dateInput = ""
       , repos = []
-      , page = TheView
       , errorMessage = Nothing
       }
     , setTime
