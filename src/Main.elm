@@ -16,24 +16,12 @@ import Date
 
 type alias Model =
     { isLoading : Bool
-    , resultsReceived : Bool
     , languageInput : String
     , dateInput : String
-    , repos : List Repo
+    , repos : Maybe (List Repo)
     , page : Page
     , errorMessage : Maybe String
     }
-
-
-type ExternalResource
-    = NotRequested
-    | Loading
-    | UserReceived (Result Http.Error Repo)
-
-
-type Page
-    = LoadingView
-    | TheView
 
 
 languages : List String
@@ -54,10 +42,9 @@ type alias Repo =
 init : ( Model, Cmd Msg )
 init =
     ( { isLoading = False
-      , resultsReceived = False
       , languageInput = "Elm"
       , dateInput = ""
-      , repos = []
+      , repos = Nothing
       , page = TheView
       , errorMessage = Nothing
       }
@@ -107,9 +94,8 @@ update msg model =
 
         FetchRepos ->
             ( { model
-                | repos = []
+                | repos = Nothing
                 , isLoading = True
-                , resultsReceived = False
               }
             , fetchRepos model
             )
@@ -119,9 +105,8 @@ update msg model =
                 Ok repos ->
                     ( { model
                         | errorMessage = Nothing
-                        , repos = repos
+                        , repos = Just repos
                         , isLoading = False
-                        , resultsReceived = True
                       }
                     , Cmd.none
                     )
@@ -130,7 +115,6 @@ update msg model =
                     ( { model
                         | errorMessage = Just (httpErrorString error "Woops! ")
                         , isLoading = False
-                        , resultsReceived = True
                       }
                     , Cmd.none
                     )
@@ -314,18 +298,8 @@ view model =
                 ]
           else
             div [] []
-        , if List.length model.repos == 0 && model.resultsReceived then
-            div [ class "row" ]
-                [ div [ class "col" ]
-                    [ p [ class "message" ] [ text "No repos found. Try searching from an earlier date, or get motivated and create a repo on github." ] ]
-                ]
-          else
-            div [] []
-        , if List.length model.repos > 0 && model.resultsReceived then
-            div [ class "row" ]
-                [ reposTable model.repos ]
-          else
-            div [] []
+        , div [ class "row" ]
+            [ reposTable model.repos ]
         ]
 
 
@@ -334,13 +308,24 @@ languageOption language =
     option [ value language ] [ text language ]
 
 
-reposTable : List Repo -> Html Msg
+reposTable : Maybe (List Repo) -> Html Msg
 reposTable repos =
-    repos
-        |> List.map reposTableBody
-        |> tbody []
-        |> appendTableHeader reposTableHeader
-        |> table [ class "table" ]
+    case repos of
+        Nothing ->
+            div [] []
+
+        Just reposReceived ->
+            case reposReceived of
+                [] ->
+                    div [ class "col" ]
+                        [ p [ class "message" ] [ text "No repos found. Try searching from an earlier date, or get motivated and create a repo on github." ] ]
+
+                _ ->
+                    reposReceived
+                        |> List.map reposTableBody
+                        |> tbody []
+                        |> appendTableHeader reposTableHeader
+                        |> table [ class "table" ]
 
 
 reposTableHeader : Html Msg
