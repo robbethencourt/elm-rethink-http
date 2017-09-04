@@ -15,13 +15,17 @@ import Date
 
 
 type alias Model =
-    { isLoading : Bool
-    , languageInput : String
+    { languageInput : String
     , dateInput : String
-    , repos : Maybe (List Repo)
-    , page : Page
-    , errorMessage : Maybe String
+    , repos : ExternalResource Http.Error (List Repo)
     }
+
+
+type ExternalResource error data
+    = NotRequested
+    | Loading
+    | Failure error
+    | Success data
 
 
 languages : List String
@@ -41,12 +45,9 @@ type alias Repo =
 
 init : ( Model, Cmd Msg )
 init =
-    ( { isLoading = False
-      , languageInput = "Elm"
+    ( { languageInput = "Elm"
       , dateInput = ""
-      , repos = Nothing
-      , page = TheView
-      , errorMessage = Nothing
+      , repos = NotRequested
       }
     , setTime
     )
@@ -94,8 +95,7 @@ update msg model =
 
         FetchRepos ->
             ( { model
-                | repos = Nothing
-                , isLoading = True
+                | repos = Loading
               }
             , fetchRepos model
             )
@@ -104,17 +104,14 @@ update msg model =
             case result of
                 Ok repos ->
                     ( { model
-                        | errorMessage = Nothing
-                        , repos = Just repos
-                        , isLoading = False
+                        | repos = Success repos
                       }
                     , Cmd.none
                     )
 
                 Err error ->
                     ( { model
-                        | errorMessage = Just (httpErrorString error "Woops! ")
-                        , isLoading = False
+                        | repos = Failure error
                       }
                     , Cmd.none
                     )
@@ -278,28 +275,31 @@ view model =
         , div [ class "row" ]
             [ div [ class "col" ]
                 [ button
-                    [ onClick FetchRepos
-                    ]
+                    [ onClick FetchRepos ]
                     [ text "Get The Repos!" ]
                 ]
             , div [ class "col" ] []
             ]
-        , if model.isLoading then
-            div [ class "row" ]
-                [ div [ class "col text-center" ]
-                    [ Loading.loadingAnimation ]
-                ]
-          else
-            div [] []
-        , if model.errorMessage /= Nothing then
-            div [ class "row" ]
-                [ div [ class "col" ]
-                    [ p [ class "error-message" ] [ text (Maybe.withDefault "" model.errorMessage) ] ]
-                ]
-          else
-            div [] []
         , div [ class "row" ]
-            [ reposTable model.repos ]
+            [ case model.repos of
+                NotRequested ->
+                    div [] []
+
+                Loading ->
+                    div [ class "col text-center" ]
+                        [ Loading.loadingAnimation ]
+
+                Failure error ->
+                    let
+                        errorMessage =
+                            Just (httpErrorString error "Woops! ")
+                    in
+                        div [ class "col" ]
+                            [ p [ class "error-message" ] [ text (Maybe.withDefault "" errorMessage) ] ]
+
+                Success repos ->
+                    reposTable repos
+            ]
         ]
 
 
@@ -308,24 +308,19 @@ languageOption language =
     option [ value language ] [ text language ]
 
 
-reposTable : Maybe (List Repo) -> Html Msg
+reposTable : List Repo -> Html Msg
 reposTable repos =
     case repos of
-        Nothing ->
-            div [] []
+        [] ->
+            div [ class "col" ]
+                [ p [ class "message" ] [ text "No repos found. Try searching from an earlier date, or get motivated and create a repo on github." ] ]
 
-        Just reposReceived ->
-            case reposReceived of
-                [] ->
-                    div [ class "col" ]
-                        [ p [ class "message" ] [ text "No repos found. Try searching from an earlier date, or get motivated and create a repo on github." ] ]
-
-                _ ->
-                    reposReceived
-                        |> List.map reposTableBody
-                        |> tbody []
-                        |> appendTableHeader reposTableHeader
-                        |> table [ class "table" ]
+        _ ->
+            repos
+                |> List.map reposTableBody
+                |> tbody []
+                |> appendTableHeader reposTableHeader
+                |> table [ class "table" ]
 
 
 reposTableHeader : Html Msg
